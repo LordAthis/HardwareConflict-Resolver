@@ -1,52 +1,55 @@
-# Ezt tedd a fix scriptek elejére:
-$LocalLog = Join-Path $PSScriptRoot "..\LOG\Fix_Activity.log"
-$GlobalLog = "C:\Temp\HardwareConflict\LOG\Fix_Activity.log"
+# --- KONFIGURACIO ---
+$PSScriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Definition
+$LocalLog = Join-Path $PSScriptRoot "..\LOG\Install.log"
+$GlobalLog = "C:\Temp\HardwareConflict\LOG\Install.log"
 
-function Write-Log {
+# Fuggveny a driver ellenorzesere (Registry alapjan)
+function Test-DriverInstalled {
+    param($SearchString)
+    $regPath = "HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}\*"
+    $drivers = Get-ItemProperty $regPath -ErrorAction SilentlyContinue | Where-Object { $_.DriverDesc -like "*$SearchString*" }
+    return ($null -ne $drivers)
+}
+
+function Write-ServiceLog {
     param($msg)
-    $msg | Out-File -FilePath $LocalLog -Append
-    $msg | Out-File -FilePath $GlobalLog -Append
+    $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+    "$timestamp - $msg" | Out-File -FilePath $LocalLog -Append
+    "$timestamp - $msg" | Out-File -FilePath $GlobalLog -Append
     Write-Host $msg
 }
 
+# --- VEGREHAJTAS ---
+Write-ServiceLog "--- Intelligens Telepites Ellenorzes Inditasa ---"
 
-$PSScriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Definition
-$LogDir = Join-Path (Split-Path $PSScriptRoot -Parent) "LOG"
-if (!(Test-Path $LogDir)) { New-Item -ItemType Directory -Path $LogDir }
+# 1. Beviteli eszkozok (Billentyuzet, Eger) - EZEKET AZONNAL VISSZA
+Write-ServiceLog "Beviteli eszkozok kenyszeritene visszakapcsolasa (Whitelist)..."
+Get-PnpDevice -FriendlyName "*Keyboard*", "*HID-compliant*", "*Mouse*", "*Touchpad*" | Enable-PnpDevice -Confirm:$false -ErrorAction SilentlyContinue
 
-Write-Host "--- Hardver-alapu telepites es aktivalas ---" -ForegroundColor Cyan
-
-# 1. Lekerdezzuk a jelenleg letiltott eszkozoket
-$DisabledDevices = Get-PnpDevice | Where-Object { $_.Status -eq "Disabled" -or $_.ConfigManagerErrorCode -eq 22 }
-
-if ($DisabledDevices.Count -eq 0) {
-    Write-Host "Nincs letiltott eszkoz. A rendszer elvileg kesz." -ForegroundColor Green
-    return
+# 2. Intel HD 4000 Ellenorzese
+$isIntelReady = Test-DriverInstalled "Intel(R) HD Graphics 4000"
+if ($isIntelReady) {
+    Write-ServiceLog "[OK] Intel Driver detektalva. VGA aktivalasa..."
+    Get-PnpDevice -FriendlyName "*Intel(R) HD Graphics 4000*" | Enable-PnpDevice -Confirm:$false
+} else {
+    Write-ServiceLog "[!] Intel Driver HIANYZIK. VGA tiltva marad a fagyas elkerulese veget!"
 }
 
-# 2. Intel VGA kezelese (Elsobbseg)
-$Intel = $DisabledDevices | Where-Object { $_.FriendlyName -like "*Intel(R) HD Graphics 4000*" }
-if ($Intel) {
-    Write-Host "Intel VGA detektalva. Aktivalas..."
-    Enable-PnpDevice -InstanceId $Intel.InstanceId -Confirm:$false
-    # Ide johet az Intel driver exe futtatasa, ha van a Drivers mappaban
-}
-
-# 3. Maradek eszkozok visszakapcsolasa (Kiveve AMD, ha meg nincs driver)
-Write-Host "Egyeb eszkozok (Billentyuzet, Hang, stb.) visszakapcsolasa..."
-foreach ($dev in $DisabledDevices) {
-    if ($dev.FriendlyName -notlike "*AMD*" -and $dev.FriendlyName -notlike "*Radeon*") {
-        Write-Host "Aktivalas: $($dev.FriendlyName)"
-        Enable-PnpDevice -InstanceId $dev.InstanceId -Confirm:$false -ErrorAction SilentlyContinue
+# 3. AMD Radeon Ellenorzese (Csak ha az Intel mar kesz)
+if ($isIntelReady) {
+    $isAMDReady = Test-DriverInstalled "Radeon"
+    if ($isAMDReady) {
+        Write-ServiceLog "[OK] AMD Driver detektalva. Kartya aktivalasa..."
+        Get-PnpDevice -FriendlyName "*AMD*" | Enable-PnpDevice -Confirm:$false
+    } else {
+        Write-ServiceLog "[!] AMD Driver HIANYZIK. AMD tiltva marad!"
     }
 }
 
-# 4. AMD utolso lepese
-$AMD = $DisabledDevices | Where-Object { $_.FriendlyName -like "*AMD*" -or $_.FriendlyName -like "*Radeon*" }
-if ($AMD) {
-    Write-Host "AMD kartya detektalva. Aktivalas es driver inditasa..."
-    Enable-PnpDevice -InstanceId $AMD.InstanceId -Confirm:$false
-    # Ide johet az AMD installer inditasa
+# 4. Egyeb eszkozok (Hang, Wifi, stb.) - Csak ha a VGA-k mar stabilak
+if ($isIntelReady -and $isAMDReady) {
+    Write-ServiceLog "Minden VGA stabil, maradek eszkozok aktivalasa..."
+    Get-PnpDevice | Where-Object { $_.Status -eq "Disabled" } | Enable-PnpDevice -Confirm:$false
 }
 
-Write-Host "A hardver-alapu helyreallitas befejezodott." -ForegroundColor Green
+Write-ServiceLog "--- Telepitesi fazis vege ---"
