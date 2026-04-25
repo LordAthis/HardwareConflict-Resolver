@@ -1,40 +1,45 @@
+# --- KONFIGURACIO ---
 $PSScriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Definition
-$LogFile = ".\LOG\Install.log"
 $DriverDir = Join-Path (Split-Path $PSScriptRoot -Parent) "Drivers"
+$LogFile = ".\LOG\Install.log"
 
-function Write-AutoLog($msg) {
-    $txt = "$(Get-Date -Format 'HH:mm:ss') - $msg"
-    Write-Host $txt -ForegroundColor Cyan
-    $txt | Out-File $LogFile -Append
+function Write-InstallLog($msg) {
+    "$(Get-Date -Format 'HH:mm:ss') - $msg" | Out-File $LogFile -Append
+    Write-Host $msg -ForegroundColor Cyan
 }
 
-Write-AutoLog "--- AUTOMATA TELEPITES INDITVA ---"
+# Csendes telepites fuggveny
+function Start-SilentInstall {
+    param($ExePath, $Args)
+    if (Test-Path $ExePath) {
+        Write-InstallLog "Telepites inditasa: $(Split-Path $ExePath -Leaf)..."
+        $process = Start-Process -FilePath $ExePath -ArgumentList $Args -Wait -PassThru
+        Write-InstallLog "Telepites befejezodott (ExitCode: $($process.ExitCode))."
+    } else {
+        Write-InstallLog "HIBA: A telepito nem talalhato: $ExePath"
+    }
+}
 
-# 1. Intel HD 4000 Telepitese (Csendes modban)
+Write-InstallLog "--- AUTOMATA CSENDES TELEPITES INDITVA ---"
+
+# 1. Intel HD 4000 Telepitese
+# Parameterek: -s (silent), -norestart (ne induljon ujra magatol)
 $IntelExe = Join-Path $DriverDir "Intel_HD4000.exe"
-if (Test-Path $IntelExe) {
-    Write-AutoLog "Intel Driver telepitese folyamatban..."
-    Start-Process -FilePath $IntelExe -ArgumentList "-s", "-norestart" -Wait
-    Write-AutoLog "Intel Driver KESZ."
-}
+Start-SilentInstall -ExePath $IntelExe -Args "-s -norestart"
 
-# 2. Intel VGA aktivalasa
+# 2. Intel VGA Aktivalasa (hogy a driver azonnal munkaba allhasson)
 Get-PnpDevice -FriendlyName "*Intel(R) HD Graphics 4000*" | Enable-PnpDevice -Confirm:$false -ErrorAction SilentlyContinue
 
-# 3. AMD Radeon Telepitese (Csendes modban)
-# A Lenovo AMD drivere altalaban a -s vagy /s kapcsoloval fut csendben
+# 3. AMD Radeon Telepitese
+# Parameterek: /s (silent), /v/qn (Windows Installer csendesitese)
 $AMDExe = Join-Path $DriverDir "AMD_Radeon.exe"
-if (Test-Path $AMDExe) {
-    Write-AutoLog "AMD Driver telepitese folyamatban..."
-    Start-Process -FilePath $AMDExe -ArgumentList "/s", "/v/qn" -Wait
-    Write-AutoLog "AMD Driver KESZ."
-}
+Start-SilentInstall -ExePath $AMDExe -Args "/s /v/qn"
 
-# 4. AMD aktivalasa
+# 4. AMD VGA Aktivalasa
 Get-PnpDevice -FriendlyName "*AMD*", "*Radeon*" | Enable-PnpDevice -Confirm:$false -ErrorAction SilentlyContinue
 
-# 5. MINDEN maradek letiltott eszkoz visszakapcsolasa (Hang, Wifi, stb.)
-Write-AutoLog "Osszes maradek hardver visszakapcsolasa..."
+# 5. Osszes maradek letiltott hardver (Hang, Wifi, stb.) visszakapcsolasa
+Write-InstallLog "Maradek hardverek (Hang, HID, stb.) aktivalasa..."
 Get-PnpDevice | Where-Object { $_.Status -eq "Disabled" } | Enable-PnpDevice -Confirm:$false -ErrorAction SilentlyContinue
 
-Write-AutoLog "--- AUTOMATA FOLYAMAT VEGE ---"
+Write-InstallLog "--- AUTOMATA FOLYAMAT VEGE ---"
