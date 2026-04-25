@@ -58,3 +58,10 @@ powershell -ExecutionPolicy Bypass .\Launcher.ps1
 
 
 
+1. Launcher.ps1 (Csökkentett módban - Fix lefut)
+2. Restart (Normál módba)
+3. Install-Drivers.ps1 (Normál módban - Intel -> AMD -> Enable All)
+
+
+
+
