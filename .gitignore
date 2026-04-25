@@ -1,0 +1,11 @@
+# Logok kizárása, de a mappa maradjon
+LOG/*
+!LOG/.gitkeep
+
+# Ideiglenes fájlok
+*.tmp
+*.bak
+*.log
+
+# PowerShell session adatok
+.history.ps1
