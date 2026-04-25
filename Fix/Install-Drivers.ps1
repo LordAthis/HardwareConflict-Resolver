@@ -1,46 +1,40 @@
-# Ekezetmentesitett kiirasok
 $PSScriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Definition
-$Log = Join-Path $PSScriptRoot "..\LOG\Install.log"
+$LogDir = Join-Path (Split-Path $PSScriptRoot -Parent) "LOG"
+if (!(Test-Path $LogDir)) { New-Item -ItemType Directory -Path $LogDir }
 
-Write-Host "--- Driver Telepites es Visszakapcsolas ---" -ForegroundColor Cyan
+Write-Host "--- Hardver-alapu telepites es aktivalas ---" -ForegroundColor Cyan
 
-# 1. Intel HD 4000 Engedelyezese (Ha le lenne tiltva)
-$Intel = Get-PnpDevice -FriendlyName "*Intel(R) HD Graphics 4000*" -ErrorAction SilentlyContinue
-if ($Intel) { 
+# 1. Lekerdezzuk a jelenleg letiltott eszkozoket
+$DisabledDevices = Get-PnpDevice | Where-Object { $_.Status -eq "Disabled" -or $_.ConfigManagerErrorCode -eq 22 }
+
+if ($DisabledDevices.Count -eq 0) {
+    Write-Host "Nincs letiltott eszkoz. A rendszer elvileg kesz." -ForegroundColor Green
+    return
+}
+
+# 2. Intel VGA kezelese (Elsobbseg)
+$Intel = $DisabledDevices | Where-Object { $_.FriendlyName -like "*Intel(R) HD Graphics 4000*" }
+if ($Intel) {
+    Write-Host "Intel VGA detektalva. Aktivalas..."
     Enable-PnpDevice -InstanceId $Intel.InstanceId -Confirm:$false
-    Write-Host "Intel HD 4000 engedelyezve."
+    # Ide johet az Intel driver exe futtatasa, ha van a Drivers mappaban
 }
 
-# 2. Intel Driver telepites (A file-nak ott kell lennie a mappaban!)
-# Itt megadhatod a letoltott driver exe-jet
-$IntelInstaller = Join-Path $PSScriptRoot "..\Drivers\Intel_HD4000.exe"
-if (Test-Path $IntelInstaller) {
-    Write-Host "Intel Driver telepitese folyamatban... Kerlek varj."
-    Start-Process -FilePath $IntelInstaller -ArgumentList "/S" -Wait
-    Write-Host "Intel Driver kesz." -ForegroundColor Green
-}
-
-# 3. AMD Radeon Engedelyezese es Telepites
-$AMD = Get-PnpDevice -FriendlyName "*AMD*" -ErrorAction SilentlyContinue
-if ($AMD) {
-    Enable-PnpDevice -InstanceId $AMD.InstanceId -Confirm:$false
-    Write-Host "AMD Kartya engedelyezve. Most indulhat az AMD telepito."
-}
-
-# 4. Minden egyeb (Hang, Wifi, stb.) visszakapcsolasa
-Write-Host "Maradek eszkozok visszakapcsolasa..."
-Get-PnpDevice | Where-Object { $_.Status -eq "Disabled" } | Enable-PnpDevice -Confirm:$false
-
-Write-Host "Keszen vagyunk! Erdemes egy utolso ujraiditast vegezni." -ForegroundColor Green
-
-
-# Install-Drivers.ps1 reszlet
-Write-Host "Eszkozok kenyszeritett visszakapcsolasa..."
-$Disabled = Get-PnpDevice | Where-Object { $_.Status -eq "Disabled" -or $_.ConfigManagerErrorCode -eq 22 }
-
-foreach ($dev in $Disabled) {
+# 3. Maradek eszkozok visszakapcsolasa (Kiveve AMD, ha meg nincs driver)
+Write-Host "Egyeb eszkozok (Billentyuzet, Hang, stb.) visszakapcsolasa..."
+foreach ($dev in $DisabledDevices) {
     if ($dev.FriendlyName -notlike "*AMD*" -and $dev.FriendlyName -notlike "*Radeon*") {
-        Write-Host "Engedelyezes: $($dev.FriendlyName)"
+        Write-Host "Aktivalas: $($dev.FriendlyName)"
         Enable-PnpDevice -InstanceId $dev.InstanceId -Confirm:$false -ErrorAction SilentlyContinue
     }
 }
+
+# 4. AMD utolso lepese
+$AMD = $DisabledDevices | Where-Object { $_.FriendlyName -like "*AMD*" -or $_.FriendlyName -like "*Radeon*" }
+if ($AMD) {
+    Write-Host "AMD kartya detektalva. Aktivalas es driver inditasa..."
+    Enable-PnpDevice -InstanceId $AMD.InstanceId -Confirm:$false
+    # Ide johet az AMD installer inditasa
+}
+
+Write-Host "A hardver-alapu helyreallitas befejezodott." -ForegroundColor Green
