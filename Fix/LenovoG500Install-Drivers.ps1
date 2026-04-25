@@ -8,6 +8,32 @@ function Write-InstallLog($msg) {
     Write-Host $msg -ForegroundColor Cyan
 }
 
+# --- HALOZATI ELLENORZES ---
+Write-InstallLog "Halozati kapcsolat ellenorzese..."
+$testHost = "8.8.8.8" # Google DNS
+$connectionLimit = 5
+$connected = $false
+
+for ($i=1; $i -le $connectionLimit; $i++) {
+    if (Test-Connection -ComputerName $testHost -Count 1 -Quiet) {
+        $connected = $true
+        Write-InstallLog "[OK] Internetkapcsolat rendben."
+        break
+    } else {
+        Write-InstallLog "[!] Nincs internet. Probalkozas ($i/$connectionLimit)..."
+        Start-Sleep -Seconds 3
+    }
+}
+
+if (-not $connected) {
+    Write-Warning "CRITICAL: Nincs internetkapcsolat! A driver letoltes sikertelen lesz."
+    Write-InstallLog "HIBA: Nincs internet, a folyamat megszakadt."
+    # Itt eldöntheted, hogy megálljon-e a script:
+    # return 
+}
+
+
+
 # Csendes telepites fuggveny
 function Start-SilentInstall {
     param($ExePath, $Args)
