@@ -42,4 +42,12 @@ Get-PnpDevice -FriendlyName "*AMD*", "*Radeon*" | Enable-PnpDevice -Confirm:$fal
 Write-InstallLog "Maradek hardverek (Hang, HID, stb.) aktivalasa..."
 Get-PnpDevice | Where-Object { $_.Status -eq "Disabled" } | Enable-PnpDevice -Confirm:$false -ErrorAction SilentlyContinue
 
+# ... (Install-Drivers.ps1 vege felé)
+Write-InstallLog "VGA frissites-vedelem aktivalasa..."
+& "$PSScriptRoot\LenovoG500Block-VGA-Updates.ps1"
+
+Write-InstallLog "--- AUTOMATA FOLYAMAT VEGE ---"
+
+
+
 Write-InstallLog "--- AUTOMATA FOLYAMAT VEGE ---"
