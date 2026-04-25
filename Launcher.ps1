@@ -1,25 +1,25 @@
-# Launcher.ps1 kiegészítése
-$isSafeMode = [bool](Get-WmiObject Win32_ComputerSystem).BootupState -match "Fail-safe"
-if ($isSafeMode) {
-    Write-Host "[!] Csökkentett mód észlelve. A tiltások végrehajtása prioritást élvez." -ForegroundColor Magenta
-}
+# Munkakonyvtar beallitasa a script helyere
+$PSScriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Definition
+Set-Location $PSScriptRoot
 
-
-# Mappaszerkezet ellenőrzése
+# Mappak letrehozasa ha hianyoznak
 $Folders = @("LOG", "Fix", "Tests")
 foreach ($f in $Folders) { if (!(Test-Path $f)) { New-Item -ItemType Directory -Name $f } }
 
-Start-Transcript -Path ".\LOG\Session_Full.log"
+# Log inditasa
+$SessionLog = Join-Path $PSScriptRoot "LOG\Session_Full.log"
+Start-Transcript -Path $SessionLog -Append
 
-Write-Host "--- HardwareConflict-Resolver Indítása ---" -ForegroundColor Cyan
+Write-Host "--- HardwareConflict-Resolver Inditasa ---" -ForegroundColor Cyan
+Write-Host "Munkakonyvtar: $PSScriptRoot"
 
-# 1. Tesztelés: Mi a helyzet most?
-Write-Host "Tesztek futtatása..."
-& ".\Tests\Hardware-Audit.ps1" 
+# 1. Teszt futtatasa
+Write-Host "Tesztek futtatasa (Hardware Audit)..."
+& "$PSScriptRoot\Tests\Hardware-Audit.ps1"
 
-# 2. Fix futtatása
-Write-Host "Javítási folyamat indítása..." -ForegroundColor Yellow
-& ".\Fix\LenovoG500-GraphicsConflict.ps1"
+# 2. Fix futtatasa
+Write-Host "Javitas inditasa (Fix)..." -ForegroundColor Yellow
+& "$PSScriptRoot\Fix\LenovoG500-GraphicsConflict.ps1"
 
-Write-Host "Folyamat kész. Ellenőrizd a LOG mappát!" -ForegroundColor Green
+Write-Host "Folyamat kesz. Ellenorizd a LOG mappat!" -ForegroundColor Green
 Stop-Transcript
