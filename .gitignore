@@ -9,3 +9,6 @@ LOG/*
 
 # PowerShell session adatok
 .history.ps1
+
+# Driverek
+Drivers/*.exe
