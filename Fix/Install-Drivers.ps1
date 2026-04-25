@@ -1,3 +1,15 @@
+# Ezt tedd a fix scriptek elejére:
+$LocalLog = Join-Path $PSScriptRoot "..\LOG\Fix_Activity.log"
+$GlobalLog = "C:\Temp\HardwareConflict\LOG\Fix_Activity.log"
+
+function Write-Log {
+    param($msg)
+    $msg | Out-File -FilePath $LocalLog -Append
+    $msg | Out-File -FilePath $GlobalLog -Append
+    Write-Host $msg
+}
+
+
 $PSScriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Definition
 $LogDir = Join-Path (Split-Path $PSScriptRoot -Parent) "LOG"
 if (!(Test-Path $LogDir)) { New-Item -ItemType Directory -Path $LogDir }
