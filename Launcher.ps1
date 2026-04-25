@@ -6,6 +6,11 @@ if (!([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]:
 $PSScriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Definition
 Set-Location $PSScriptRoot
 
+# Launcher.ps1 - Halozat kenyszeritett visszakapcsolasa a letoltes elott
+Write-Host "Halozati eszkozok ellenorzese..." -ForegroundColor Cyan
+Get-PnpDevice | Where-Object { $_.FriendlyName -like "*Network*" -or $_.FriendlyName -like "*Wireless*" -or $_.FriendlyName -like "*Wi-Fi*" } | Enable-PnpDevice -Confirm:$false -ErrorAction SilentlyContinue
+
+
 # 2. Mappak es Automata Driver Letoltes
 $DriverDir = Join-Path $PSScriptRoot "Drivers"
 $LogDir = Join-Path $PSScriptRoot "LOG"
