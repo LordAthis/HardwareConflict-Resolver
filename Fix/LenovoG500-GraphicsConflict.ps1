@@ -21,3 +21,6 @@ foreach ($err in $Errors) {
     $msg | Out-File $LogFile -Append
     Disable-PnpDevice -InstanceId $err.InstanceId -Confirm:$false -ErrorAction SilentlyContinue
 }
+
+"--- JAVITAS KESZ ---" | Out-File $LogFile -Append
+
