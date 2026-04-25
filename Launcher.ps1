@@ -1,29 +1,20 @@
 $PSScriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Definition
-Set-Location $PSScriptRoot
+$DriverDir = Join-Path $PSScriptRoot "Drivers"
+$LogDir = Join-Path $PSScriptRoot "LOG"
 
-# Admin jog kerese
-if (!([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
-    Start-Process powershell.exe "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`"" -Verb RunAs
-    exit
+# Mappak letrehozasa
+foreach ($dir in @($DriverDir, $LogDir)) { if (!(Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force } }
+
+# Automata letoltes, ha hianyoznak a driverek
+$Drivers = @{
+    "Intel_HD4000.exe" = "https://intel.com"
+    "AMD_Radeon.exe"   = "https://lenovo.com"
 }
 
-# Mappak kenyszeritese
-if (!(Test-Path "LOG")) { New-Item -ItemType Directory -Path "LOG" -Force }
-
-Write-Host "--- G500 GYORS JAVITAS ---" -ForegroundColor Cyan
-
-# 1. Audit es Fix futtatasa sorban
-& ".\Tests\Hardware-Audit.ps1"
-& ".\Fix\LenovoG500-GraphicsConflict.ps1"
-
-# 2. LOG megnyitasa (Hogy lassuk mi tortent)
-$FixLog = ".\LOG\Fix_Activity.log"
-if (Test-Path $FixLog) {
-    notepad.exe $FixLog
-} else {
-    Write-Host "A LOG meg nem jott letre, futtatom az Install-t is..."
-    & ".\Fix\Install-Drivers.ps1"
-    if (Test-Path ".\LOG\Install.log") { notepad.exe ".\LOG\Install.log" }
+foreach ($file in $Drivers.Keys) {
+    $path = Join-Path $DriverDir $file
+    if (!(Test-Path $path)) {
+        Write-Host "[!] $file hianyzik. Letoltes folyamatban..." -ForegroundColor Yellow
+        Invoke-WebRequest -Uri $Drivers[$file] -OutFile $path
+    }
 }
-
-Write-Host "KESZ. Ha csokkentett modban vagy, inditsd ujra a gepet!" -ForegroundColor Green
