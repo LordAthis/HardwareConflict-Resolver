@@ -1,10 +1,13 @@
 $PSScriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Definition
 $LogFile = ".\LOG\Fix_Activity.log"
 
+# A fuggveny neve legyen konzisztens
 function Write-Log($msg) {
-    "$(Get-Date -Format 'HH:mm:ss') - $msg" | Out-File $LogFile -Append
-    Write-Host $msg
+    $timestamp = Get-Date -Format "HH:mm:ss"
+    "$timestamp - $msg" | Out-File $LogFile -Append
+    Write-Host $msg -ForegroundColor Cyan
 }
+
 
 Write-Log "--- JAVITAS INDITVA ---"
 
