@@ -44,3 +44,17 @@ Miután a script lefutott és letiltotta a hibás eszközöket, indítsd újra a
 - `/LOG`: Itt találod a futási naplókat (Hardware_Audit.log, Fix_Activity.log).
 - `Launcher.ps1`: A teljes folyamat koordinátora.
 
+
+
+# Tippek:
+- Hogyan futtasd rendszergazdaként, hogy ne vándoroljon el?
+Csökkentett módú parancssorba írd ezt:
+powershell -Command "Start-Process powershell -ArgumentList '-ExecutionPolicy Bypass -File C:\UT\A\SCRIPTEDHEZ\Launcher.ps1' -Verb RunAs"
+
+Vagy:
+- Navigálj a mappába a sima CMD-ben, majd:
+powershell -ExecutionPolicy Bypass .\Launcher.ps1
+(Mivel csökkentett módban a CMD alapból rendszergazdai joggal futhat, nem fog elvándorolni, ha a Set-Location benne van a scriptben.)
+
+
+
