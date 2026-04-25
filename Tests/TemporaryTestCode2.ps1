@@ -1,0 +1,1 @@
+Get-PnpDevice | Where-Object { $_.FriendlyName -like "*Network*" -or $_.FriendlyName -like "*Wireless*" -or $_.FriendlyName -like "*Wi-Fi*" -or $_.FriendlyName -like "*Mouse*" -or $_.FriendlyName -like "*HID*" } | Enable-PnpDevice -Confirm:$false -ErrorAction SilentlyContinue
