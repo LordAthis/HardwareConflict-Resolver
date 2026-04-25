@@ -1,18 +1,22 @@
-# Első feladat: A hibás (felkiáltójeles) hardverek azonnali tiltása a fagyás elkerülésére
-$ErrorDevices = Get-PnpDevice | Where-Object { $_.Status -eq "Error" -or $_.Problem -ne "NoError" }
+$PSScriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Definition
+$FixLog = Join-Path $PSScriptRoot "..\LOG\Fix_Activity.log"
 
+# 1. Hibas eszkozok azonnali tiltasa
+$ErrorDevices = Get-PnpDevice | Where-Object { $_.Status -eq "Error" -or $_.Problem -ne "NoError" }
 foreach ($dev in $ErrorDevices) {
-    $logMsg = "CRITICAL: Hibás eszköz észleelve, tiltás azonnal: $($dev.FriendlyName)"
-    $logMsg | Out-File -FilePath "..\LOG\Fix_Activity.log" -Append
+    $msg = "CRITICAL: Hibas eszkoz tiltasa: $($dev.FriendlyName)"
+    $msg | Out-File -FilePath $FixLog -Append
+    Write-Host "Tiltas: $($dev.FriendlyName)" -ForegroundColor Red
     Disable-PnpDevice -InstanceId $dev.InstanceId -Confirm:$false -ErrorAction SilentlyContinue
 }
 
-# Ezután jöhet a specifikus G500 logika (AMD, Audio, stb. tiltása)
-$SpecificTargets = @("*AMD*", "*Radeon*", "*Conexant*", "*Intel(R) Display Audio*")
-foreach ($target in $SpecificTargets) {
-    $dev = Get-PnpDevice -FriendlyName $target -ErrorAction SilentlyContinue
+# 2. Specifikus G500 celpontok
+$Targets = @("*AMD*", "*Radeon*", "*Conexant*", "*Intel(R) Display Audio*")
+foreach ($t in $Targets) {
+    $dev = Get-PnpDevice -FriendlyName $t -ErrorAction SilentlyContinue | Where-Object Status -ne "Disabled"
     if ($dev) {
-        "FIX: Specifikus eszköz tiltása: $($dev.FriendlyName)" | Out-File -FilePath "..\LOG\Fix_Activity.log" -Append
+        "FIX: Celzott tiltas: $($dev.FriendlyName)" | Out-File -FilePath $FixLog -Append
+        Write-Host "Tiltas (Celzott): $($dev.FriendlyName)" -ForegroundColor Yellow
         Disable-PnpDevice -InstanceId $dev.InstanceId -Confirm:$false -ErrorAction SilentlyContinue
     }
 }
