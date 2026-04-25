@@ -41,7 +41,7 @@ if ($isSafeMode) {
         $LogContent = Get-Content $FixLog
         if ($LogContent -contains "--- JAVITAS KESZ ---") {
             Write-Host "[+] Tiltasok mar megtortentek. Inditom a telepito modult..." -ForegroundColor Green
-            & ".\Fix\Install-Drivers.ps1"
+            & ".\Fix\LenovoG500Install-Drivers.ps1"
         } else {
             Write-Host "[!] Nincs lezart javitas a logban. Tiltas inditasa..."
             & ".\Fix\LenovoG500-GraphicsConflict.ps1"
