@@ -32,3 +32,15 @@ Write-Host "Maradek eszkozok visszakapcsolasa..."
 Get-PnpDevice | Where-Object { $_.Status -eq "Disabled" } | Enable-PnpDevice -Confirm:$false
 
 Write-Host "Keszen vagyunk! Erdemes egy utolso ujraiditast vegezni." -ForegroundColor Green
+
+
+# Install-Drivers.ps1 reszlet
+Write-Host "Eszkozok kenyszeritett visszakapcsolasa..."
+$Disabled = Get-PnpDevice | Where-Object { $_.Status -eq "Disabled" -or $_.ConfigManagerErrorCode -eq 22 }
+
+foreach ($dev in $Disabled) {
+    if ($dev.FriendlyName -notlike "*AMD*" -and $dev.FriendlyName -notlike "*Radeon*") {
+        Write-Host "Engedelyezes: $($dev.FriendlyName)"
+        Enable-PnpDevice -InstanceId $dev.InstanceId -Confirm:$false -ErrorAction SilentlyContinue
+    }
+}
