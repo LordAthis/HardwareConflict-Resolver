@@ -1,54 +1,32 @@
-# 1. Admin jog es munkakonyvtar beallitasa
+$PSScriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Definition
+Set-Location $PSScriptRoot
+
+# Admin jog kérése
 if (!([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
     Start-Process powershell.exe "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`"" -Verb RunAs
     exit
 }
-$PSScriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Definition
-Set-Location $PSScriptRoot
 
-$DriverDir = Join-Path $PSScriptRoot "Drivers"
-$LogDir = Join-Path $PSScriptRoot "LOG"
-$FixLog = Join-Path $LogDir "Fix_Activity.log"
+# 1. Hálózat és beviteli eszközök kényszerített feloldása (Hogy ne legyen szívás)
+Get-PnpDevice | Where-Object { $_.FriendlyName -like "*Network*" -or $_.FriendlyName -like "*Wireless*" -or $_.FriendlyName -like "*Mouse*" } | Enable-PnpDevice -Confirm:$false -ErrorAction SilentlyContinue
 
-# Mappak kenyszeritese
-foreach ($dir in @($DriverDir, $LogDir)) { if (!(Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force } }
-
-Write-Host "--- G500 SZERVIZ AUTOMATA ---" -ForegroundColor Cyan
-
-# 2. Driverek letoltese es FELOLDASA (Unblock)
+# 2. Driverek letöltése (Ha hiányoznak)
 $Drivers = @{
     "Intel_HD4000.exe" = "https://intel.com"
     "AMD_Radeon.exe"   = "https://lenovo.com"
 }
-
-foreach ($file in $Drivers.Keys) {
-    $path = Join-Path $DriverDir $file
-    if (Test-Path $path) {
-        Write-Host "[OK] $file mar ott van a mappaban. Feloldas..." -ForegroundColor Green
-        Unblock-File -Path $path  # EZ OLDJA FEL A TILTOTT ALLAPOTOT
-    } else {
-        Write-Host "[!] $file hianyzik. Letoltes..." -ForegroundColor Yellow
-        try { 
-            Invoke-WebRequest -Uri $Drivers[$file] -OutFile $path -ErrorAction Stop 
-            Unblock-File -Path $path
-        } catch { 
-            Write-Host "HIBA: A letoltes nem sikerult (Webhely elutasitva?). Masold be manualisan a Drivers mappaba!" -ForegroundColor Red
-        }
-    }
+$DriverDir = New-Item -ItemType Directory -Path ".\Drivers" -Force
+foreach ($f in $Drivers.Keys) {
+    $p = Join-Path $DriverDir $f
+    if (!(Test-Path $p)) { Invoke-WebRequest -Uri $Drivers[$f] -OutFile $p }
+    Unblock-File $p # A letöltött driver feloldása!
 }
 
-# 3. Donteshozatal a LOG alapjan
-if (Test-Path $FixLog) {
-    $LogContent = Get-Content $FixLog
-    if ($LogContent -contains "--- JAVITAS KESZ ---") {
-        Write-Host "[+] Javitva volt, inditom a telepito modult..." -ForegroundColor Green
-        & ".\Fix\LenovoG500Install-Drivers.ps1"
-    } else {
-        & ".\Fix\LenovoG500-GraphicsConflict.ps1"
-    }
-} else {
+# 3. Mód szerinti futtatás
+$isSafe = [bool](Get-WmiObject Win32_ComputerSystem).BootupState -match "Fail-safe"
+if ($isSafe) {
     & ".\Fix\LenovoG500-GraphicsConflict.ps1"
+    Write-Host "Kész! Indítsd újra normál módban!" -ForegroundColor Green
+} else {
+    & ".\Fix\LenovoG500Install-Drivers.ps1"
 }
-
-# 4. Log megnyitasa
-if (Test-Path $FixLog) { notepad.exe $FixLog }
