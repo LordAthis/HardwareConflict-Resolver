@@ -1,3 +1,10 @@
+# Launcher.ps1 kiegészítése
+$isSafeMode = [bool](Get-WmiObject Win32_ComputerSystem).BootupState -match "Fail-safe"
+if ($isSafeMode) {
+    Write-Host "[!] Csökkentett mód észlelve. A tiltások végrehajtása prioritást élvez." -ForegroundColor Magenta
+}
+
+
 # Mappaszerkezet ellenőrzése
 $Folders = @("LOG", "Fix", "Tests")
 foreach ($f in $Folders) { if (!(Test-Path $f)) { New-Item -ItemType Directory -Name $f } }
