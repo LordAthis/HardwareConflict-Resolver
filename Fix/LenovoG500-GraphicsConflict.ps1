@@ -1,26 +1,43 @@
+$PSScriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Definition
 $LogFile = ".\LOG\Fix_Activity.log"
-"--- JAVITAS INDITVA: $(Get-Date) ---" | Out-File $LogFile -Append
 
-# 1. Kritikus eszkozok tiltasa (AMD es Audio)
-# Minden eszkoz, aminek problemaja van (Problem -ne 0)
-$AllBadDevices = Get-PnpDevice | Where-Object { $_.Problem -ne "NoError" -or $_.Status -eq "Error" }
+function Write-Log($msg) {
+    "$(Get-Date -Format 'HH:mm:ss') - $msg" | Out-File $LogFile -Append
+    Write-Host $msg
+}
 
-foreach ($dev in $AllBadDevices) {
-    # Kivétel a beviteli eszközöknek, hogy ne vágjuk el a billentyűzetet
-    if ($dev.FriendlyName -notlike "*Keyboard*" -and $dev.FriendlyName -notlike "*Mouse*") {
-        Write-Log "TILTS (Hibas eszkoz): $($dev.FriendlyName)"
+Write-Log "--- JAVITAS INDITVA ---"
+
+# 1. WHITELIST - Ezeket az eszkozoket SOHA nem tiltjuk le (Bevitel + Halozat)
+$WhiteList = @("*Keyboard*", "*HID-compliant*", "*Mouse*", "*Touchpad*", "*Network*", "*Wireless*", "*Wi-Fi*", "*Ethernet*")
+
+# 2. KRITIKUS VGA ES AUDIO TILTASA (Wildcard alapjan)
+$Targets = @("*AMD*", "*Radeon*", "*Conexant*", "*Intel(R) Display Audio*")
+
+foreach ($t in $Targets) {
+    $devices = Get-PnpDevice -FriendlyName $t -ErrorAction SilentlyContinue
+    foreach ($dev in $devices) {
+        Write-Log "CELZOTT TILTAS: $($dev.FriendlyName)"
         Disable-PnpDevice -InstanceId $dev.InstanceId -Confirm:$false -ErrorAction SilentlyContinue
     }
 }
 
-# 2. Felkialtojelek takaritasa
-$Errors = Get-PnpDevice | Where-Object { $_.Status -ne "OK" -and $_.FriendlyName -notlike "*Keyboard*" }
-foreach ($err in $Errors) {
-    $msg = "HIBA TILTASA: $($err.FriendlyName)"
-    Write-Host $msg -ForegroundColor Red
-    $msg | Out-File $LogFile -Append
-    Disable-PnpDevice -InstanceId $err.InstanceId -Confirm:$false -ErrorAction SilentlyContinue
+# 3. HIBAS ESZKOZOK TILTASA (Kiveve ami a Whitelist-en van)
+$AllBadDevices = Get-PnpDevice | Where-Object { $_.Problem -ne "NoError" -or $_.Status -eq "Error" }
+
+foreach ($dev in $AllBadDevices) {
+    # Ellenorizzuk, hogy a hibas eszkoz rajta van-e a vedett listan
+    $isProtected = $false
+    foreach ($safe in $WhiteList) { 
+        if ($dev.FriendlyName -like $safe) { $isProtected = $true } 
+    }
+    
+    if (-not $isProtected) {
+        Write-Log "HIBA TILTASA: $($dev.FriendlyName)"
+        Disable-PnpDevice -InstanceId $dev.InstanceId -Confirm:$false -ErrorAction SilentlyContinue
+    } else {
+        Write-Log "VEDETT ESZKOZ (Kihagyva): $($dev.FriendlyName)"
+    }
 }
 
-"--- JAVITAS KESZ ---" | Out-File $LogFile -Append
-
+Write-Log "--- JAVITAS KESZ ---"
