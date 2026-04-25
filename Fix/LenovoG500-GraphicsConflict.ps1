@@ -2,14 +2,13 @@ $LogFile = ".\LOG\Fix_Activity.log"
 "--- JAVITAS INDITVA: $(Get-Date) ---" | Out-File $LogFile -Append
 
 # 1. Kritikus eszkozok tiltasa (AMD es Audio)
-$Targets = @("*AMD*", "*Radeon*", "*Conexant*", "*Intel(R) Display Audio*")
+# Minden eszkoz, aminek problemaja van (Problem -ne 0)
+$AllBadDevices = Get-PnpDevice | Where-Object { $_.Problem -ne "NoError" -or $_.Status -eq "Error" }
 
-foreach ($t in $Targets) {
-    $devices = Get-PnpDevice -FriendlyName $t -ErrorAction SilentlyContinue
-    foreach ($dev in $devices) {
-        $msg = "TILTS: $($dev.FriendlyName) [$($dev.InstanceId)]"
-        Write-Host $msg -ForegroundColor Yellow
-        $msg | Out-File $LogFile -Append
+foreach ($dev in $AllBadDevices) {
+    # Kivétel a beviteli eszközöknek, hogy ne vágjuk el a billentyűzetet
+    if ($dev.FriendlyName -notlike "*Keyboard*" -and $dev.FriendlyName -notlike "*Mouse*") {
+        Write-Log "TILTS (Hibas eszkoz): $($dev.FriendlyName)"
         Disable-PnpDevice -InstanceId $dev.InstanceId -Confirm:$false -ErrorAction SilentlyContinue
     }
 }
