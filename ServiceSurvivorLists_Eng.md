@@ -17,7 +17,7 @@ Before installing any drivers, create a local admin account without a password.
     net user Service /add
     net localgroup Administrators Service /add
     ```
-    *(Note: For Hungarian Windows use: `net localgroup Rendszergazdak Service /add`)*
+    *(Note: For Hungarian Windows use: `net localgroup Rendszergazdák Service /add`)*
 
 ### 3. 🔑 Disabling PIN and Biometrics (Windows Hello)
 The PIN code is hardware-dependent (TPM). If you disable the GPU or update the BIOS, it may become invalid.
