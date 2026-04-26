@@ -15,7 +15,7 @@ Mielőtt bármilyen drivert feltennél, hozz létre egy jelszó nélküli helyi 
 *   **Parancssor (Admin):**
     ```cmd
     net user Szerviz /add
-    net localgroup Rendszergazdak Szerviz /add
+    net localgroup Rendszergazdák Szerviz /add
     ```
     *(Angol Windows esetén: `net localgroup Administrators Szerviz /add`)*
 
