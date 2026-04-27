@@ -18,10 +18,10 @@ if (Test-Path $IntelExe) {
 $AMDExe = Join-Path $DriverDir "AMD_Radeon.exe"
 if (Test-Path $AMDExe) { Start-Process $AMDExe -ArgumentList "/s /v/qn" -Wait }
 
-# Windows Update blokkolás
+# Frissítés tiltás
 & "$PSScriptRoot\LenovoG500Block-VGA-Updates.ps1"
 
-# VÉGSŐ ELLENŐRZÉS (JSON ALAPJÁN)
+# VÉGSŐ ELLENŐRZÉS
 $Config = Get-Content "$BaseDir\data\GodDriverConf.json" | ConvertFrom-Json
 $TargetDrivers = $Config.Drivers | Where-Object { $_.Arch -eq $OSArch }
 
@@ -33,8 +33,8 @@ foreach ($D in $TargetDrivers) {
 
 if ($FinalSuccess) {
     New-ItemProperty -Path "HKLM:\SOFTWARE\HardwareConflictResolver" -Name "FinalInstall" -Value "Done" -PropertyType String -Force | Out-Null
-    Write-Host "Sikeres telepites es ellenorzes!" -ForegroundColor Green
+    Write-Host "MINDEN KESZ ÉS ELLENŐRIZVE!" -ForegroundColor Green
     & "$BaseDir\Scripts\Set-NormalBoot.ps1"
 } else {
-    Write-Error "A telepites befejezodott, de az ellenorzes hibat talalt!"
+    Write-Error "A telepites lefutott, de az ellenorzes hibat jelzett!"
 }
