@@ -5,7 +5,7 @@
             "Name": "Intel HD Graphics 4000",
             "FileName": "Intel_HD4000.exe",
             "Arch": "x64",
-            "Url": "https://lenovo.com",
+            "Url": "https://download.lenovo.com/consumer/mobiles/ivga146w8132u1.exe",
             "TargetVersion": "9.17.10.2932",
             "HWID": "PCI\\VEN_8086&DEV_0166",
             "DriverFile": "igdkmd64.sys"
@@ -14,7 +14,7 @@
             "Name": "AMD Radeon HD 8500M",
             "FileName": "AMD_Radeon.exe",
             "Arch": "x64",
-            "Url": "https://lenovo.com",
+            "Url": "https://download.lenovo.com/consumer/mobiles/0dg1019f.exe",
             "TargetVersion": "12.100.14.7000",
             "HWID": "PCI\\VEN_1002&DEV_6663",
             "DriverFile": "atikkmpag.sys"
