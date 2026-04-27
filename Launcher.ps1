@@ -66,3 +66,41 @@ if ($isSafe) {
         & "$PSScriptRoot\Scripts\Set-SafeBoot-Networking.ps1"
     }
 }
+
+
+# --- 3. MOD SZERINTI FUTTATAS ---
+$isSafe = [bool](Get-WmiObject Win32_ComputerSystem).BootupState -match "Fail-safe"
+
+if ($isSafe) {
+    Write-Log "Csokkentett mod: Javito folyamat inditasa..."
+    & "$PSScriptRoot\Fix\LenovoG500-GraphicsConflict.ps1"
+    
+    # DINAMIKUS ELLENORZES: Csak akkor lepunk tovabb, ha a JSON-ban eloirt verzio aktiv
+    $IntelSpec = $TargetDrivers | Where-Object { $_.Name -like "*Intel*" }
+    $IsOk = & "$PSScriptRoot\Scripts\Check-DriverStatus.ps1" -TargetVersion $IntelSpec.TargetVersion -HardwareID $IntelSpec.HWID
+    
+    if ($IsOk) { 
+        Set-StepState "SafeModeFix" "Done" 
+        Write-Log "SIKER: A javitas visszaellenorzve, a driver verzio megfelelo."
+        Write-Host "Kesz! A rendszer keszen all a normal modu telepitesre." -ForegroundColor Green
+    } else {
+        Write-Log "HIBA: A javitas lefutott, de az ellenorzes ELBUKOTT! Verzio elteres."
+        Write-Host "FIGYELEM: A beallitas nem sikerult, ellenorizze a naplot!" -ForegroundColor Red
+    }
+} else {
+    # Normal mod: Telepites csak ha a SafeModeFix igazoltan kesz
+    if ((Get-StepState "SafeModeFix") -eq "Done" -and (Get-StepState "FinalInstall") -ne "Done") {
+        Write-Log "Normal mod: Telepites inditasa..."
+        & "$PSScriptRoot\Fix\LenovoG500Install-Drivers.ps1"
+        
+        # A LenovoG500Install-Drivers.ps1 vegen is van ellenorzes, de itt is biztosra megyunk
+        if ((Get-StepState "FinalInstall") -eq "Done") {
+            Write-Log "A teljes folyamat sikeresen lezajlott."
+        }
+    } elseif ((Get-StepState "FinalInstall") -eq "Done") {
+        Write-Host "A rendszer mar korabban sikeresen javitva lett." -ForegroundColor Green
+    } else {
+        Write-Log "Elso futas vagy felbehagyott folyamat. Inditas Csokkentett modba..."
+        & "$PSScriptRoot\Scripts\Set-SafeBoot-Networking.ps1"
+    }
+}
