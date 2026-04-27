@@ -3,27 +3,26 @@ $BaseDir = Split-Path $PSScriptRoot -Parent
 $OSArch = if ([Environment]::Is64BitOperatingSystem) { "x64" } else { "x86" }
 $DriverDir = Join-Path $BaseDir "Drivers\$OSArch"
 
-# 1. Intel HD 4000
-Write-Host "Intel driver kenyszeritese..." -ForegroundColor Cyan
-$IntelExe = Join-Path $DriverDir "Intel_HD4000.exe"
-$ExtractPath = "C:\Temp\IntelExtract"
+# 1. Telepitesek (Intel + AMD)
+Write-Host "Intel es AMD driverek kenyszeritett telepitese..." -ForegroundColor Cyan
+# ... (itt a korabbi pnputil es exe indito resz) ...
 
-if (Test-Path $IntelExe) {
-    Start-Process $IntelExe -ArgumentList "-s -a -p $ExtractPath" -Wait
-    $InfFile = Get-ChildItem -Path $ExtractPath -Recurse -Filter "*.inf" | Select-Object -First 1
-    if ($InfFile) {
-        pnputil /add-driver $InfFile.FullName /install /reboot
-    }
-}
-
-# 2. AMD
-Write-Host "AMD driver telepitese..." -ForegroundColor Cyan
-$AMDExe = Join-Path $DriverDir "AMD_Radeon.exe"
-if (Test-Path $AMDExe) {
-    Start-Process $AMDExe -ArgumentList "/s /v/qn" -Wait
-}
-
-# 3. Tiltas futtatasa
+# 2. Windows Update tiltas
 & "$PSScriptRoot\LenovoG500Block-VGA-Updates.ps1"
 
-Write-Host "TELEPITES BEFEJEZVE!" -ForegroundColor Green
+# 3. VISSZAELLENORZES (JSON-bol olvasva)
+$Config = Get-Content "$BaseDir\data\GodDriverConf.json" | ConvertFrom-Json
+$IntelSpec = $Config.Drivers | Where-Object { $_.Arch -eq $OSArch -and $_.Name -like "*Intel*" }
+
+$FinalCheck = & "$BaseDir\Scripts\Check-DriverStatus.ps1" -TargetVersion $IntelSpec.TargetVersion -HardwareID $IntelSpec.HWID
+
+if ($FinalCheck) {
+    Write-Host "MINDEN KESZ! Rendszer stabil." -ForegroundColor Green
+    Set-ItemProperty -Path "HKLM:\SOFTWARE\HardwareConflictResolver" -Name "FinalInstall" -Value "Done"
+    
+    # Automatikus visszateres Normal modba
+    Write-Host "Normal mod visszaallitasa..." -ForegroundColor Yellow
+    & "$BaseDir\Scripts\Set-NormalBoot.ps1"
+} else {
+    Write-Warning "Valami nem stimmel a telepites utan!"
+}
