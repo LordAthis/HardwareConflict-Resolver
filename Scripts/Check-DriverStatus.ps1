@@ -1,18 +1,17 @@
-param(
-    [string]$TargetVersion, 
-    [string]$HardwareID,
-    [string]$DriverFileName # Pl. "igdkmd64.sys" az Intelhez
-)
+param([string]$TargetVersion, [string]$HardwareID, [string]$DriverFileName)
 
-Write-Host "Ellenorzes: $HardwareID ($TargetVersion)..." -ForegroundColor Cyan
+Write-Host "Ellenorzes: $HardwareID..." -ForegroundColor Cyan
 
-# 1. PnP eszkoz alapu ellenorzes
-$Device = Get-PnpDevice -FriendlyName "*$HardwareID*" -ErrorAction SilentlyContinue
-if (!$Device) { return $false }
+# Kereses HWID vagy FriendlyName alapjan
+$Device = Get-PnpDevice | Where-Object { $_.InstanceId -like "*$HardwareID*" -or $_.FriendlyName -like "*$HardwareID*" } | Select-Object -First 1
+
+if (!$Device) { 
+    Write-Host "[!] Eszkoz nem talalhato!" -ForegroundColor Red
+    return $false 
+}
 
 $CurrentVersion = (Get-PnpDeviceProperty -InstanceId $Device.InstanceId -KeyName "DEVPKEY_Device_DriverVersion").Data
 
-# 2. Fajl alapu mely ellenorzes (ha megadtunk fajlnevet)
 $FileMatch = $true
 if ($DriverFileName) {
     $DriverPath = Join-Path $env:SystemRoot "System32\drivers\$DriverFileName"
@@ -23,9 +22,7 @@ if ($DriverFileName) {
 }
 
 if ($CurrentVersion -eq $TargetVersion -and $FileMatch) {
-    Write-Host "[OK] Verzio egyezik: $CurrentVersion" -ForegroundColor Green
     return $true
 } else {
-    Write-Host "[!] Verzio elteres! (Talalt: $CurrentVersion)" -ForegroundColor Red
     return $false
 }
