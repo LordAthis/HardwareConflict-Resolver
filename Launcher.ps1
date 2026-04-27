@@ -20,53 +20,61 @@ $Config = Get-Content "$PSScriptRoot\data\GodDriverConf.json" | ConvertFrom-Json
 $OSArch = if ([Environment]::Is64BitOperatingSystem) { "x64" } else { "x86" }
 $TargetDrivers = $Config.Drivers | Where-Object { $_.Arch -eq $OSArch }
 
-# 0. Lépés: Riport és Visszaállítási pont (Kényszerítve)
-if ((Get-StepState "InitialBackup") -ne "Done") {
-    Write-Log "Riport keszitese és visszaallitasi pont kenyszeritese..."
-    Get-PnpDevice | Select-Object FriendlyName, InstanceId, Status | Export-Csv -Path "C:\Temp\Hardware_Report.csv" -NoTypeInformation
-    & "$PSScriptRoot\Scripts\Enable-RestorePoint.ps1"
-    Set-StepState "InitialBackup" "Done"
-}
-
-# 1. Driver letöltés (Ha hiányzik)
-foreach ($Driver in $TargetDrivers) {
-    $DriverPath = "$PSScriptRoot\Drivers\$OSArch\$($Driver.FileName)"
-    if (!(Test-Path $DriverPath)) {
-        New-Item -ItemType Directory -Path (Split-Path $DriverPath) -Force | Out-Null
-        Write-Log "Letoltes inditva: $($Driver.FileName)"
-        Invoke-WebRequest -Uri $Driver.Url -OutFile $DriverPath
-        Unblock-File $DriverPath
-    }
-}
-
-# 2. Mód szerinti futtatás
-$isSafe = [bool](Get-WmiObject Win32_ComputerSystem).BootupState -match "Fail-safe"
-
-if ($isSafe) {
-    Write-Log "Csokkentett mod detektalva. Fix inditasa..."
-    & "$PSScriptRoot\Fix\LenovoG500-GraphicsConflict.ps1"
-    
-    # Dinamikus ellenőrzés a JSON alapján
-    $CheckSuccess = $true
-    foreach ($D in $TargetDrivers) {
-        $Status = & "$PSScriptRoot\Scripts\Check-DriverStatus.ps1" -TargetVersion $D.TargetVersion -HardwareID $D.HWID
-        if (!$Status) { $CheckSuccess = $false }
+try {
+    # 0. LEPES: Riport es Visszaallitasi pont
+    if ((Get-StepState "InitialBackup") -ne "Done") {
+        Write-Log "Riport es mentesi pont keszitese..."
+        Get-PnpDevice | Select-Object FriendlyName, InstanceId, Status | Export-Csv -Path "C:\Temp\Hardware_Report.csv" -NoTypeInformation
+        & "$PSScriptRoot\Scripts\Enable-RestorePoint.ps1"
+        Set-StepState "InitialBackup" "Done"
     }
 
-    if ($CheckSuccess) {
-        Set-StepState "SafeModeFix" "Done"
-        Write-Log "SafeModeFix SIKERES. Kerjuk inditsa ujra a gepet normal modban."
+    # 1. DRIVER LETOLTES
+    foreach ($Driver in $TargetDrivers) {
+        $DriverPath = "$PSScriptRoot\Drivers\$OSArch\$($Driver.FileName)"
+        if (!(Test-Path $DriverPath)) {
+            New-Item -ItemType Directory -Path (Split-Path $DriverPath) -Force | Out-Null
+            Write-Log "Letoltes inditva: $($Driver.FileName)"
+            # Itt a JSON-ben visszaalakitott URL-t hasznalja a rendszer
+            Invoke-WebRequest -Uri $Driver.Url -OutFile $DriverPath -ErrorAction Stop
+            Unblock-File $DriverPath
+        }
+    }
+
+    # 2. MOD SZERINTI FUTTATAS
+    $isSafe = [bool](Get-WmiObject Win32_ComputerSystem).BootupState -match "Fail-safe"
+
+    if ($isSafe) {
+        Write-Log "Csokkentett mod detektalva. Fix inditasa..."
+        & "$PSScriptRoot\Fix\LenovoG500-GraphicsConflict.ps1"
+        
+        $CheckSuccess = $true
+        foreach ($D in $TargetDrivers) {
+            $Status = & "$PSScriptRoot\Scripts\Check-DriverStatus.ps1" -TargetVersion $D.TargetVersion -HardwareID $D.HWID
+            if (!$Status) { $CheckSuccess = $false }
+        }
+
+        if ($CheckSuccess) {
+            Set-StepState "SafeModeFix" "Done"
+            Write-Log "SafeModeFix SIKERES. Kerjuk inditsa ujra a gepet normal modban."
+        } else {
+            Write-Log "HIBA: A driverek nem felelnek meg az eloirasnak a Fix utan!"
+        }
     } else {
-        Write-Log "HIBA: A Fix lefutott, de a driverek nem felelnek meg a JSON-nak!"
+        if ((Get-StepState "SafeModeFix") -eq "Done" -and (Get-StepState "FinalInstall") -ne "Done") {
+            Write-Log "Normal mod: Telepites inditasa..."
+            & "$PSScriptRoot\Fix\LenovoG500Install-Drivers.ps1"
+        } elseif ((Get-StepState "FinalInstall") -eq "Done") {
+            Write-Host "A rendszer mar optimalis allapotban van!" -ForegroundColor Green
+        } else {
+            Write-Log "Inditas Csokkentett modba..."
+            & "$PSScriptRoot\Scripts\Set-SafeBoot-Networking.ps1"
+        }
     }
-} else {
-    if ((Get-StepState "SafeModeFix") -eq "Done" -and (Get-StepState "FinalInstall") -ne "Done") {
-        Write-Log "Normal mod: Telepites inditasa..."
-        & "$PSScriptRoot\Fix\LenovoG500Install-Drivers.ps1"
-    } elseif ((Get-StepState "FinalInstall") -eq "Done") {
-        Write-Host "A rendszer mar optimalis allapotban van!" -ForegroundColor Green
-    } else {
-        Write-Log "Folyamat inditasa: Csokkentett modba valtas..."
-        & "$PSScriptRoot\Scripts\Set-SafeBoot-Networking.ps1"
-    }
+}
+catch {
+    Write-Log "KRITIKUS HIBA: $($_.Exception.Message)"
+}
+finally {
+    if (Test-Path $LogPath) { Start-Process notepad.exe -ArgumentList $LogPath }
 }
