@@ -1,6 +1,5 @@
 {
     "Platform": "Lenovo G500",
-    "ConflictDescription": "AMD Radeon Windows Update driver vs Intel HD 4000 synchronization issue.",
     "Drivers": [
         {
             "Name": "Intel HD Graphics 4000",
@@ -8,14 +7,16 @@
             "Arch": "x64",
             "Url": "https://lenovo.com",
             "TargetVersion": "9.17.10.2932",
+            "HWID": "PCI\\VEN_8086&DEV_0166",
             "Action": "ForceInstall"
         },
         {
-            "Name": "AMD Radeon Graphics",
+            "Name": "AMD Radeon HD 8500M",
             "FileName": "AMD_Radeon.exe",
             "Arch": "x64",
             "Url": "https://lenovo.com",
             "TargetVersion": "12.100.14.7000",
+            "HWID": "PCI\\VEN_1002&DEV_6663",
             "Action": "ForceInstall"
         }
     ]
