@@ -18,69 +18,49 @@ function Set-StepState { param($StepName, $Value) New-ItemProperty -Path $RegPat
 $LogPath = "C:\Temp\HardwareConflict_LOG.txt"
 function Write-Log { param($Msg) $t = Get-Date -Format "yyyy-MM-dd HH:mm:ss"; "[$t] $Msg" | Tee-Object -FilePath $LogPath -Append }
 
-# --- 0. LEPES: Kotezo Visszaallitasi Pont es Riport ---
+# JSON Adatok betoltese
+$Config = Get-Content "$PSScriptRoot\data\GodDriverConf.json" | ConvertFrom-Json
+$OSArch = if ([Environment]::Is64BitOperatingSystem) { "x64" } else { "x86" }
+$TargetDrivers = $Config.Drivers | Where-Object { $_.Arch -eq $OSArch }
+
+# --- 0. LEPES: Kotezo Visszaallitasi Pont ---
 if ((Get-StepState "InitialBackup") -ne "Done") {
     & "$PSScriptRoot\Scripts\Enable-RestorePoint.ps1"
-    Write-Log "Hardver riport mentese..."
-    Get-PnpDevice | Select-Object FriendlyName, InstanceId, Status | Export-Csv -Path "C:\Temp\Hardware_Report.csv" -NoTypeInformation
     Set-StepState "InitialBackup" "Done"
 }
 
-# --- 1. ESZKOZOK FELSZABADITASA ---
-Write-Log "Input/Halozati eszkozok kenyszeritett engedelyezese..."
-Get-PnpDevice | Where-Object { $_.FriendlyName -like "*Network*" -or $_.FriendlyName -like "*Wireless*" -or $_.FriendlyName -like "*Mouse*" } | Enable-PnpDevice -Confirm:$false -ErrorAction SilentlyContinue
-
-# --- 2. DRIVER LETOLTES (JSON ALAPJAN) ---
-$Config = Get-Content "$PSScriptRoot\data\GodDriverConf.json" | ConvertFrom-Json
-$OSArch = if ([Environment]::Is64BitOperatingSystem) { "x64" } else { "x86" }
-
-foreach ($Driver in $Config.Drivers | Where-Object { $_.Arch -eq $OSArch }) {
+# --- 1. DRIVER LETOLTES (Dinamikus) ---
+foreach ($Driver in $TargetDrivers) {
     $DriverPath = "$PSScriptRoot\Drivers\$OSArch\$($Driver.FileName)"
     if (!(Test-Path $DriverPath)) {
         New-Item -ItemType Directory -Path (Split-Path $DriverPath) -Force | Out-Null
         Write-Log "Letoltes: $($Driver.FileName)..."
-        try {
-            Invoke-WebRequest -Uri $Driver.Url -OutFile $DriverPath -TimeoutSec 300
-            Unblock-File $DriverPath
-        } catch {
-            Write-Log "HIBA: Letoltes megszakadt: $($Driver.FileName)"
-        }
+        Invoke-WebRequest -Uri $Driver.Url -OutFile $DriverPath
+        Unblock-File $DriverPath
     }
 }
 
-# --- 3. MOD SZERINTI FUTTATAS ---
+# --- 2. MOD SZERINTI FUTTATAS ---
 $isSafe = [bool](Get-WmiObject Win32_ComputerSystem).BootupState -match "Fail-safe"
 
 if ($isSafe) {
-    Write-Log "Csokkentett mod: Fix inditasa..."
+    Write-Log "Csokkentett mod: Fix futtatasa..."
     & "$PSScriptRoot\Fix\LenovoG500-GraphicsConflict.ps1"
     
-    # Mely ellenorzes a Fix utan
-    $Check = & "$PSScriptRoot\Scripts\Check-DriverStatus.ps1" `
-        -TargetVersion "9.17.10.2932" `
-        -HardwareID "Intel(R) HD Graphics 4000" `
-        -DriverFileName "igdkmd64.sys"
-
-    if ($Check) { 
+    # Ellenorzes a JSON adatok alapjan (Intel-re fokuszalva a G500-nal)
+    $IntelSpec = $TargetDrivers | Where-Object { $_.Name -like "*Intel*" }
+    $IsOk = & "$PSScriptRoot\Scripts\Check-DriverStatus.ps1" -TargetVersion $IntelSpec.TargetVersion -HardwareID $IntelSpec.HWID
+    
+    if ($IsOk) { 
         Set-StepState "SafeModeFix" "Done" 
-        Write-Log "SafeModeFix sikeresen ellenorizve."
-    } else {
-        Write-Log "HIBA: A Fix lefutott, de a driver verzio nem megfelelo!"
+        Write-Log "Sikeres ellenorzes. Indulhat a normal mod."
     }
 } else {
-    # Normal mod: Telepites ha a SafeModeFix mar kesz
     if ((Get-StepState "SafeModeFix") -eq "Done" -and (Get-StepState "FinalInstall") -ne "Done") {
-        Write-Log "Normal mod: Driverek telepitese..."
+        Write-Log "Normal mod: Telepites inditasa..."
         & "$PSScriptRoot\Fix\LenovoG500Install-Drivers.ps1"
-        
-        # Telepites utani visszaellenorzes
-        $FinalCheck = & "$PSScriptRoot\Scripts\Check-DriverStatus.ps1" -TargetVersion "9.17.10.2932" -HardwareID "Intel(R) HD Graphics 4000"
-        if ($FinalCheck) {
-            Set-StepState "FinalInstall" "Done"
-            Write-Log "Minden driver a helyen, rendszer stabil."
-        }
     } elseif ((Get-StepState "FinalInstall") -eq "Done") {
-        Write-Host "A javitas mar korabban sikeresen befejezodott!" -ForegroundColor Green
+        Write-Host "A rendszer mar javitva van!" -ForegroundColor Green
     } else {
         Write-Log "Inditas Csokkentett modba..."
         & "$PSScriptRoot\Scripts\Set-SafeBoot-Networking.ps1"
