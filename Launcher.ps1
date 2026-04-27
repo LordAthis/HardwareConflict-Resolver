@@ -18,14 +18,13 @@ function Set-StepState { param($StepName, $Value) New-ItemProperty -Path $RegPat
 $LogPath = "C:\Temp\HardwareConflict_LOG.txt"
 function Write-Log { param($Msg) $t = Get-Date -Format "yyyy-MM-dd HH:mm:ss"; "[$t] $Msg" | Tee-Object -FilePath $LogPath -Append }
 
-# --- 0. LÉPÉS: AUTOMATIKUS RIPORT ÉS VISSZAÁLLÍTÁSI PONT ---
+# --- 0. LEPES: Kotezo Visszaallitasi Pont ---
 if ((Get-StepState "InitialBackup") -ne "Done") {
-    Write-Log "Rendszerallapot mentese es riport keszitese..."
-    # Riport
-    Get-PnpDevice | Select-Object FriendlyName, InstanceId, Status | Export-Csv -Path "C:\Temp\Hardware_Report.csv" -NoTypeInformation
+    & "$PSScriptRoot\Scripts\Enable-RestorePoint.ps1"
     
-    # Visszaállítási pont (Ha engedélyezve van a rendszervédelmen)
-    Checkpoint-Computer -Description "HardwareConflictResolver_BeforeFix" -RestorePointType MODIFY_SETTINGS -ErrorAction SilentlyContinue
+    # Riport mentese C:\Temp-be
+    Write-Host "Hardver riport mentese..."
+    Get-PnpDevice | Select-Object FriendlyName, InstanceId, Status | Export-Csv -Path "C:\Temp\Hardware_Report.csv" -NoTypeInformation
     
     Set-StepState "InitialBackup" "Done"
 }
@@ -34,46 +33,29 @@ if ((Get-StepState "InitialBackup") -ne "Done") {
 Write-Log "Input/Halozati eszkozok kenyszeritett engedelyezese..."
 Get-PnpDevice | Where-Object { $_.FriendlyName -like "*Network*" -or $_.FriendlyName -like "*Wireless*" -or $_.FriendlyName -like "*Mouse*" } | Enable-PnpDevice -Confirm:$false -ErrorAction SilentlyContinue
 
-# --- 2. DRIVER KEZELÉS (JSON ALAPJÁN) ---
-$ConfigPath = "$PSScriptRoot\Adat\GodDriverConf.json"
-if (Test-Path $ConfigPath) {
-    $OSArch = if ([Environment]::Is64BitOperatingSystem) { "x64" } else { "x86" }
-    $Config = Get-Content $ConfigPath | ConvertFrom-Json
-    $DriverDir = New-Item -ItemType Directory -Path "$PSScriptRoot\Drivers" -Force
+# --- 2. DRIVER KEZELES ---
+$Config = Get-Content "$PSScriptRoot\data\GodDriverConf.json" | ConvertFrom-Json
+$OSArch = if ([Environment]::Is64BitOperatingSystem) { "x64" } else { "x86" }
 
-    foreach ($Driver in $Config.Drivers | Where-Object { $_.Arch -eq $OSArch }) {
-        $Dest = Join-Path $DriverDir $Driver.FileName
-        if (!(Test-Path $Dest)) {
-            Write-Log "Letoltes: $($Driver.FileName)"
-            try {
-                Invoke-WebRequest -Uri $Driver.Url -OutFile $Dest -TimeoutSec 300
-                Unblock-File $Dest
-            } catch {
-                Write-Log "HIBA: Nem sikerult letolteni a $($Driver.FileName) fajlt!"
-            }
-        }
+foreach ($Driver in $Config.Drivers | Where-Object { $_.Arch -eq $OSArch }) {
+    $DriverPath = "$PSScriptRoot\Drivers\$OSArch\$($Driver.FileName)"
+    if (!(Test-Path $DriverPath)) {
+        New-Item -ItemType Directory -Path (Split-Path $DriverPath) -Force | Out-Null
+        Write-Host "Letoltes: $($Driver.FileName)..."
+        Invoke-WebRequest -Uri $Driver.Url -OutFile $DriverPath
+        Unblock-File $DriverPath
     }
 }
 
-# --- 3. MÓD SZERINTI FUTTATÁS ÉS ELLENŐRZÉS ---
-$isSafe = [bool](Get-WmiObject Win32_ComputerSystem).BootupState -match "Fail-safe"
-
+# --- 3. MOD SZERINTI FUTTATAS ---
 if ($isSafe) {
-    Write-Log "Csokkentett mod eszlelve. Fix futtatasa..."
+    Write-Host "Fix futtatasa Csokkentett modban..." -ForegroundColor Cyan
     & "$PSScriptRoot\Fix\LenovoG500-GraphicsConflict.ps1"
     
-    # Visszaellenőrzés (Példa: Registry vagy eszköz állapot)
-    # Itt ellenőrizheted, hogy a cél-driver állapota megváltozott-e
-    Set-StepState "SafeModeFix" "Done"
-    Write-Host "Kesz! Inditsd ujra normal modban!" -ForegroundColor Green
-} else {
-    if ((Get-StepState "SafeModeFix") -eq "Done") {
-        Write-Log "Visszateres normal modba, driverek telepitese..."
-        & "$PSScriptRoot\Fix\LenovoG500Install-Drivers.ps1"
-        Set-StepState "FinalInstall" "Done"
-    } else {
-        Write-Log "Inditas csokkentett modba..."
-        & "$PSScriptRoot\Scripts\Set-SafeBoot-Networking.ps1"
-        Restart-Computer
+    # Ellenorzes a kulso scripttel
+    $IsOk = & "$PSScriptRoot\Scripts\Check-DriverStatus.ps1" -TargetVersion "9.17.10.2932" -HardwareID "Intel(R) HD Graphics 4000"
+    if ($IsOk) { 
+        Set-StepState "SafeModeFix" "Done" 
+        Write-Host "Sikeres ellenorzes!" -ForegroundColor Green
     }
 }
