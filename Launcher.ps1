@@ -1,11 +1,14 @@
+# Kornyezet beallitasa
 $PSScriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Definition
 Set-Location $PSScriptRoot
 
+# Admin jog kerese
 if (!([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
     Start-Process powershell.exe "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`"" -Verb RunAs
     exit
 }
 
+# Állapotkövetés és Naplózás
 $RegPath = "HKLM:\SOFTWARE\HardwareConflictResolver"
 if (!(Test-Path $RegPath)) { New-Item -Path $RegPath -Force | Out-Null }
 
@@ -16,12 +19,13 @@ $LogPath = "C:\Temp\HardwareConflict_LOG.txt"
 if (!(Test-Path "C:\Temp")) { New-Item -ItemType Directory -Path "C:\Temp" -Force | Out-Null }
 function Write-Log { param($Msg) $t = Get-Date -Format "yyyy-MM-dd HH:mm:ss"; "[$t] $Msg" | Tee-Object -FilePath $LogPath -Append }
 
+# Konfiguráció betöltése
 $Config = Get-Content "$PSScriptRoot\data\GodDriverConf.json" | ConvertFrom-Json
 $OSArch = if ([Environment]::Is64BitOperatingSystem) { "x64" } else { "x86" }
 $TargetDrivers = $Config.Drivers | Where-Object { $_.Arch -eq $OSArch }
 
 try {
-    # 0. LEPES: Riport es Visszaallitasi pont
+    # 0. Lépés: Rendszerállapot mentése
     if ((Get-StepState "InitialBackup") -ne "Done") {
         Write-Log "Riport es mentesi pont keszitese..."
         Get-PnpDevice | Select-Object FriendlyName, InstanceId, Status | Export-Csv -Path "C:\Temp\Hardware_Report.csv" -NoTypeInformation
@@ -29,23 +33,29 @@ try {
         Set-StepState "InitialBackup" "Done"
     }
 
-    # 1. DRIVER LETOLTES
+    # 1. Driver letöltés (Ha nincs meg, megállunk!)
     foreach ($Driver in $TargetDrivers) {
         $DriverPath = "$PSScriptRoot\Drivers\$OSArch\$($Driver.FileName)"
         if (!(Test-Path $DriverPath)) {
             New-Item -ItemType Directory -Path (Split-Path $DriverPath) -Force | Out-Null
             Write-Log "Letoltes inditva: $($Driver.FileName)"
-            # Itt a JSON-ben visszaalakitott URL-t hasznalja a rendszer
-            Invoke-WebRequest -Uri $Driver.Url -OutFile $DriverPath -ErrorAction Stop
-            Unblock-File $DriverPath
+            
+            try {
+                Invoke-WebRequest -Uri $Driver.Url -OutFile $DriverPath -ErrorAction Stop
+                Unblock-File $DriverPath
+                Write-Log "SIKER: $($Driver.FileName) letoltve."
+            } catch {
+                Write-Log "KRITIKUS HIBA: Nem sikerult letolteni a(z) $($Driver.FileName) fajlt!"
+                throw "A letoltes megszakadt. Ellenorizze a JSON-t vagy az internetet!"
+            }
         }
     }
 
-    # 2. MOD SZERINTI FUTTATAS
+    # 2. Mód szerinti vezérlés
     $isSafe = [bool](Get-WmiObject Win32_ComputerSystem).BootupState -match "Fail-safe"
 
     if ($isSafe) {
-        Write-Log "Csokkentett mod detektalva. Fix inditasa..."
+        Write-Log "Csokkentett mod detektalva. Fix folyamat inditasa..."
         & "$PSScriptRoot\Fix\LenovoG500-GraphicsConflict.ps1"
         
         $CheckSuccess = $true
@@ -56,25 +66,25 @@ try {
 
         if ($CheckSuccess) {
             Set-StepState "SafeModeFix" "Done"
-            Write-Log "SafeModeFix SIKERES. Kerjuk inditsa ujra a gepet normal modban."
-        } else {
-            Write-Log "HIBA: A driverek nem felelnek meg az eloirasnak a Fix utan!"
+            Write-Log "SafeModeFix visszaellenorizve. Kerjuk inditsa ujra a gepet!"
         }
     } else {
         if ((Get-StepState "SafeModeFix") -eq "Done" -and (Get-StepState "FinalInstall") -ne "Done") {
             Write-Log "Normal mod: Telepites inditasa..."
             & "$PSScriptRoot\Fix\LenovoG500Install-Drivers.ps1"
         } elseif ((Get-StepState "FinalInstall") -eq "Done") {
-            Write-Host "A rendszer mar optimalis allapotban van!" -ForegroundColor Green
+            Write-Host "A rendszer mar javitva lett korabban." -ForegroundColor Green
         } else {
-            Write-Log "Inditas Csokkentett modba..."
+            Write-Log "Folyamat kezdese: Atvaltas Csokkentett modba..."
             & "$PSScriptRoot\Scripts\Set-SafeBoot-Networking.ps1"
         }
     }
 }
 catch {
-    Write-Log "KRITIKUS HIBA: $($_.Exception.Message)"
+    Write-Log "A folyamat hiba miatt leallt: $($_.Exception.Message)"
 }
 finally {
-    if (Test-Path $LogPath) { Start-Process notepad.exe -ArgumentList $LogPath }
+    if (Test-Path $LogPath) {
+        Start-Process notepad.exe -ArgumentList $LogPath
+    }
 }
