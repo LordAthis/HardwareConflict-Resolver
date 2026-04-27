@@ -3,26 +3,38 @@ $BaseDir = Split-Path $PSScriptRoot -Parent
 $OSArch = if ([Environment]::Is64BitOperatingSystem) { "x64" } else { "x86" }
 $DriverDir = Join-Path $BaseDir "Drivers\$OSArch"
 
-# 1. Telepitesek (Intel + AMD)
-Write-Host "Intel es AMD driverek kenyszeritett telepitese..." -ForegroundColor Cyan
-# ... (itt a korabbi pnputil es exe indito resz) ...
+Write-Host "Driverek kenyszeritett telepitese..." -ForegroundColor Cyan
 
-# 2. Windows Update tiltas
+# Intel telepítés
+$IntelExe = Join-Path $DriverDir "Intel_HD4000.exe"
+if (Test-Path $IntelExe) {
+    $ExtractPath = "C:\Temp\IntelExtract"
+    Start-Process $IntelExe -ArgumentList "-s -a -p $ExtractPath" -Wait
+    $InfFile = Get-ChildItem -Path $ExtractPath -Recurse -Filter "*.inf" | Select-Object -First 1
+    if ($InfFile) { pnputil /add-driver $InfFile.FullName /install }
+}
+
+# AMD telepítés
+$AMDExe = Join-Path $DriverDir "AMD_Radeon.exe"
+if (Test-Path $AMDExe) { Start-Process $AMDExe -ArgumentList "/s /v/qn" -Wait }
+
+# Windows Update blokkolás
 & "$PSScriptRoot\LenovoG500Block-VGA-Updates.ps1"
 
-# 3. VISSZAELLENORZES (JSON-bol olvasva)
+# VÉGSŐ ELLENŐRZÉS (JSON ALAPJÁN)
 $Config = Get-Content "$BaseDir\data\GodDriverConf.json" | ConvertFrom-Json
-$IntelSpec = $Config.Drivers | Where-Object { $_.Arch -eq $OSArch -and $_.Name -like "*Intel*" }
+$TargetDrivers = $Config.Drivers | Where-Object { $_.Arch -eq $OSArch }
 
-$FinalCheck = & "$BaseDir\Scripts\Check-DriverStatus.ps1" -TargetVersion $IntelSpec.TargetVersion -HardwareID $IntelSpec.HWID
+$FinalSuccess = $true
+foreach ($D in $TargetDrivers) {
+    $Status = & "$BaseDir\Scripts\Check-DriverStatus.ps1" -TargetVersion $D.TargetVersion -HardwareID $D.HWID
+    if (!$Status) { $FinalSuccess = $false }
+}
 
-if ($FinalCheck) {
-    Write-Host "MINDEN KESZ! Rendszer stabil." -ForegroundColor Green
-    Set-ItemProperty -Path "HKLM:\SOFTWARE\HardwareConflictResolver" -Name "FinalInstall" -Value "Done"
-    
-    # Automatikus visszateres Normal modba
-    Write-Host "Normal mod visszaallitasa..." -ForegroundColor Yellow
+if ($FinalSuccess) {
+    New-ItemProperty -Path "HKLM:\SOFTWARE\HardwareConflictResolver" -Name "FinalInstall" -Value "Done" -PropertyType String -Force | Out-Null
+    Write-Host "Sikeres telepites es ellenorzes!" -ForegroundColor Green
     & "$BaseDir\Scripts\Set-NormalBoot.ps1"
 } else {
-    Write-Warning "Valami nem stimmel a telepites utan!"
+    Write-Error "A telepites befejezodott, de az ellenorzes hibat talalt!"
 }
