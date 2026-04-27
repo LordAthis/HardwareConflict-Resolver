@@ -8,7 +8,7 @@
             "Url": "https://lenovo.com",
             "TargetVersion": "9.17.10.2932",
             "HWID": "PCI\\VEN_8086&DEV_0166",
-            "Action": "ForceInstall"
+            "DriverFile": "igdkmd64.sys"
         },
         {
             "Name": "AMD Radeon HD 8500M",
@@ -17,7 +17,7 @@
             "Url": "https://lenovo.com",
             "TargetVersion": "12.100.14.7000",
             "HWID": "PCI\\VEN_1002&DEV_6663",
-            "Action": "ForceInstall"
+            "DriverFile": "atikkmpag.sys"
         }
     ]
 }
