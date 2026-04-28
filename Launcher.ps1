@@ -33,23 +33,33 @@ try {
         Set-StepState "InitialBackup" "Done"
     }
 
-    # 1. Driver letöltés (Ha nincs meg, megállunk!)
-    foreach ($Driver in $TargetDrivers) {
-        $DriverPath = "$PSScriptRoot\Drivers\$OSArch\$($Driver.FileName)"
-        if (!(Test-Path $DriverPath)) {
-            New-Item -ItemType Directory -Path (Split-Path $DriverPath) -Force | Out-Null
-            Write-Log "Letoltes inditva: $($Driver.FileName)"
-            
-            try {
-                Invoke-WebRequest -Uri $Driver.Url -OutFile $DriverPath -ErrorAction Stop
-                Unblock-File $DriverPath
-                Write-Log "SIKER: $($Driver.FileName) letoltve."
-            } catch {
-                Write-Log "KRITIKUS HIBA: Nem sikerult letolteni a(z) $($Driver.FileName) fajlt!"
-                throw "A letoltes megszakadt. Ellenorizze a JSON-t vagy az internetet!"
-            }
+# --- 1. DRIVER LETOLTES (Google Drive megerosites kerulessel) ---
+foreach ($Driver in $TargetDrivers) {
+    $DriverPath = "$PSScriptRoot\Drivers\$OSArch\$($Driver.FileName)"
+    if (!(Test-Path $DriverPath)) {
+        New-Item -ItemType Directory -Path (Split-Path $DriverPath) -Force | Out-Null
+        Write-Log "Letoltes inditva (GDrive bypass): $($Driver.FileName)"
+        
+        $FileId = ($Driver.Url -split "id=")[1]
+        $Url = "https://google.com"
+        
+        # 1. kor: Megerosito kod lekerese
+        $Response = Invoke-WebRequest -Uri $Url -SessionVariable "Session" -ErrorAction SilentlyContinue
+        $Token = ($Response.Links | Where-Object { $_.href -like "*confirm=*" }).href | ForEach-Object { ($_ -split "confirm=")[1].Split("&")[0] }
+        
+        # 2. kor: Tenyleges letoltes a tokennel
+        $DownloadUrl = if ($Token) { "$Url&confirm=$Token" } else { $Url }
+        
+        try {
+            Invoke-WebRequest -Uri $DownloadUrl -WebSession $Session -OutFile $DriverPath -TimeoutSec 600
+            Unblock-File $DriverPath
+            Write-Log "SIKER: $($Driver.FileName) letoltve."
+        } catch {
+            Write-Log "HIBA: Nem sikerult a letoltes! ($($_.Exception.Message))"
         }
     }
+}
+
 
     # 2. Mód szerinti vezérlés
     $isSafe = [bool](Get-WmiObject Win32_ComputerSystem).BootupState -match "Fail-safe"
