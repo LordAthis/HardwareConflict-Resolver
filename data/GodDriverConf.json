@@ -3,21 +3,19 @@
     "Drivers": [
         {
             "Name": "Intel HD Graphics 4000",
-            "FileName": "Intel_HD4000.exe",
+            "FileName": "Intel_HD4000.cab",
             "Arch": "x64",
-            "Url": "https://download.lenovo.com/consumer/mobiles/ivga146w8132u1.exe",
+            "Url": "https://docs.google.com/uc?export=download&id=19UL4cznBWa7GE7jxLG7yuk0mJwPS4g22",
             "TargetVersion": "9.17.10.2932",
-            "HWID": "PCI\\VEN_8086&DEV_0166",
-            "DriverFile": "igdkmd64.sys"
+            "HWID": "PCI\\VEN_8086&DEV_0166"
         },
         {
             "Name": "AMD Radeon HD 8500M",
             "FileName": "AMD_Radeon.exe",
             "Arch": "x64",
-            "Url": "https://download.lenovo.com/consumer/mobiles/0dg1019f.exe",
+            "Url": "https://docs.google.com/uc?export=download&id=1DlZH_Ulz7EKbFD4NhgSEnh5Qi8VYlo_o",
             "TargetVersion": "12.100.14.7000",
-            "HWID": "PCI\\VEN_1002&DEV_6663",
-            "DriverFile": "atikkmpag.sys"
+            "HWID": "PCI\\VEN_1002&DEV_6663"
         }
     ]
 }
